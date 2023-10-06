@@ -208,39 +208,53 @@ class SparkAdapter(SQLAdapter):
 
         kwargs = {"schema_relation": schema_relation}
 
+        # try:
+        #     # Default compute engine behavior: show tables extended
+        #     show_table_extended_rows = self.execute_macro(LIST_RELATIONS_MACRO_NAME, kwargs=kwargs)
+        #     return self._build_spark_relation_list(
+        #         row_list=show_table_extended_rows,
+        #         relation_info_func=self._get_relation_information,
+        #     )
+            
+        #     # Making changes assuming Iceberg as only file_format
+        #     # Iceberg behavior: 3-row result of relations obtained
         try:
-            # Default compute engine behavior: show tables extended
-            show_table_extended_rows = self.execute_macro(LIST_RELATIONS_MACRO_NAME, kwargs=kwargs)
+            show_table_rows = self.execute_macro(
+                LIST_RELATIONS_SHOW_TABLES_MACRO_NAME, kwargs=kwargs
+            )
             return self._build_spark_relation_list(
-                row_list=show_table_extended_rows,
-                relation_info_func=self._get_relation_information,
+                row_list=show_table_rows,
+                relation_info_func=self._get_relation_information_using_describe,
             )
         except dbt.exceptions.DbtRuntimeError as e:
-            errmsg = getattr(e, "msg", "")
-            if f"Database '{schema_relation}' not found" in errmsg:
-                return []
-            # Iceberg compute engine behavior: show table
-            elif "SHOW TABLE EXTENDED is not supported for v2 tables" in errmsg:
-                # this happens with spark-iceberg with v2 iceberg tables
-                # https://issues.apache.org/jira/browse/SPARK-33393
-                try:
-                    # Iceberg behavior: 3-row result of relations obtained
-                    show_table_rows = self.execute_macro(
-                        LIST_RELATIONS_SHOW_TABLES_MACRO_NAME, kwargs=kwargs
-                    )
-                    return self._build_spark_relation_list(
-                        row_list=show_table_rows,
-                        relation_info_func=self._get_relation_information_using_describe,
-                    )
-                except dbt.exceptions.DbtRuntimeError as e:
-                    description = "Error while retrieving information about"
-                    logger.debug(f"{description} {schema_relation}: {e.msg}")
-                    return []
-            else:
-                logger.debug(
-                    f"Error while retrieving information about {schema_relation}: {errmsg}"
-                )
-                return []
+            description = "Error while retrieving information about"
+            logger.debug(f"{description} {schema_relation}: {e.msg}")
+            return []
+            # errmsg = getattr(e, "msg", "")
+            # if f"Database '{schema_relation}' not found" in errmsg:
+            #     return []
+            # # Iceberg compute engine behavior: show table
+            # elif "SHOW TABLE EXTENDED is not supported for v2 tables" in errmsg:
+            #     # this happens with spark-iceberg with v2 iceberg tables
+            #     # https://issues.apache.org/jira/browse/SPARK-33393
+            #     try:
+            #         # Iceberg behavior: 3-row result of relations obtained
+            #         show_table_rows = self.execute_macro(
+            #             LIST_RELATIONS_SHOW_TABLES_MACRO_NAME, kwargs=kwargs
+            #         )
+            #         return self._build_spark_relation_list(
+            #             row_list=show_table_rows,
+            #             relation_info_func=self._get_relation_information_using_describe,
+            #         )
+            #     except dbt.exceptions.DbtRuntimeError as e:
+            #         description = "Error while retrieving information about"
+            #         logger.debug(f"{description} {schema_relation}: {e.msg}")
+            #         return []
+            # else:
+            #     logger.debug(
+            #         f"Error while retrieving information about {schema_relation}: {errmsg}"
+            #     )
+            #     return []
 
     def get_relation(self, database: str, schema: str, identifier: str) -> Optional[BaseRelation]:
         if not self.Relation.get_default_include_policy().database:
